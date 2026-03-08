@@ -1,0 +1,17 @@
+[project]
+name = "SCIBS-Python"
+version = "0.1.0"
+description = "Migrate SCIBS codebase to Python + Matlab support"
+requires-python = ">=3.12"
+authors = [
+    { name = "Blake Moody", email = "blake.moody001@umb.edu" },
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest"
+]
+
+[tool.setuptools.packages.find]
+where = ["src", "."] # search in both src/ and root
+include = ["src*"]

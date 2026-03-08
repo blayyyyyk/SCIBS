@@ -1,0 +1,12 @@
+# editors
+.zed
+.vscode
+
+# pytest
+.pytest_cache
+
+# cached files
+**/__pycache__
+
+# source data
+**/*.mat

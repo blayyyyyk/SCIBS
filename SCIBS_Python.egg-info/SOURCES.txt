@@ -1,0 +1,9 @@
+pyproject.toml
+SCIBS_Python.egg-info/PKG-INFO
+SCIBS_Python.egg-info/SOURCES.txt
+SCIBS_Python.egg-info/dependency_links.txt
+SCIBS_Python.egg-info/requires.txt
+SCIBS_Python.egg-info/top_level.txt
+src/__init__.py
+src/tetcor.py
+tests/test_tetcor.py
