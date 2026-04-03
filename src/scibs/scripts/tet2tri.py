@@ -5,19 +5,30 @@ import numpy as np
 from functools import partial
 
 
-# Process Mode Parsing #
-parser = ArgumentParser(usage="tet2tri [-options] ptsName tetName triName [elName [totName]]\n\ttet2tri [-options] name", add_help=False)
-parser.add_argument('-s', help="output surface triangles only", action="store_true")
-parser.add_argument("ptsName", type=str)
-parser.add_argument("tetName", nargs="?", type=str)
-parser.add_argument("triName", nargs="?", type=str)
-parser.add_argument("elName", nargs="?", type=str)
-parser.add_argument("totName", nargs="?", type=str)
+# # Process Mode Parsing #
+# parser = ArgumentParser(usage="tet2tri [-options] ptsName tetName triName [elName [totName]]\n\ttet2tri [-options] name", add_help=False)
+# parser.add_argument('-s', help="output surface triangles only", action="store_true")
+# parser.add_argument("ptsName", type=str)
+# parser.add_argument("tetName", nargs="?", type=str)
+# parser.add_argument("triName", nargs="?", type=str)
+# parser.add_argument("elName", nargs="?", type=str)
+# parser.add_argument("totName", nargs="?", type=str)
 
 
-def tet2tri(pts_file, tet_file, tri_file, el_file: Optional[str] = None, tot_file: Optional[str] = None, surface_only=False, verbose=False):
-    tet_pts = read_pts(pts_file)
-    tet_ids = read_tet(tet_file)
+def tet2tri(pts_name: str, tet_name: Optional[str] = None, tri_name: Optional[str] = None, el_name: Optional[str] = None, tot_name: Optional[str] = None, surface_only: bool = False, verbose: bool = False):
+    opt_kwargs = [tet_name, tri_name, el_name, tot_name]
+    if any(opt_kwargs[:2]) and not all(opt_kwargs[:2]):
+        raise ValueError("If one of tetName or triName is provided, both must be provided.")
+    elif not any(opt_kwargs[:2]):
+        tet_name = pts_name
+        tri_name = pts_name
+        
+    if surface_only and not any(opt_kwargs):
+        el_name = pts_name
+        tot_name = pts_name
+        
+    tet_pts = read_pts(f"{pts_name}.pts")
+    tet_ids = read_tet(f"{tet_name}.tet")
 
     # extract the 4 faces for each tetrahedron.
     faces = np.vstack([
@@ -64,63 +75,38 @@ def tet2tri(pts_file, tet_file, tri_file, el_file: Optional[str] = None, tot_fil
         tet_pts = tet_pts[old_indices]
         tri_ids = old_to_new[tri_ids]
 
-        if el_file:
-            print(f"Writing mapping to {el_file}...")
-            write_el(el_file, old_indices)
+        if el_name:
+            print(f"Writing mapping to {el_name}...")
+            write_el(f"{el_name}.el", old_indices)
 
-        if tot_file:
-            print(f"Writing cell topology to {tot_file}...")
-            write_tot(tot_file, final_tet_of_tri, final_local_nodes)
+        if tot_name:
+            print(f"Writing cell topology to {tot_name}...")
+            write_tot(f"{tot_name}.tot", final_tet_of_tri, final_local_nodes)
 
 
     else:
         tri_ids = faces
         
     if verbose:
-        print(f"Writing {len(tri_ids)} triangles to {tri_file}...")
+        print(f"Writing {len(tri_ids)} triangles to {tri_name}.tri ...")
     
-    write_tri(tri_file, tet_pts, tri_ids)
+    write_tri(f"{tri_name}.tri", tet_pts, tri_ids)
 
     if verbose:
         print(f"Done.")
 
 
-def main(args):
-    pos_args = [getattr(args, arg) for arg in ["tetName", "triName", "elName", "totName"] if getattr(args, arg)]
-
-    if len(pos_args) not in [0, 2, 3, 4]:
-        parser.error("missing positional arguments")
-        
-    if not args.tetName:
-        args.tetName = args.ptsName
-    
-    if not args.triName:
-        args.triName = args.ptsName
-        
-    if args.s and len(pos_args) == 0:
-        args.elName = args.ptsName
-        args.totName = args.ptsName
-    
-    pts_file = f"{args.ptsName}.pts"
-    tet_file = f"{args.tetName}.tet"
-    tri_file = f"{args.triName}.tri"
-    el_file = f"{args.elName}.el"
-    tot_file = f"{args.totName}.tot"
-
-    tet2tri(pts_file, tet_file, tri_file, el_file, tot_file, surface_only=args.s)
-
-
-parser.set_defaults(func=main)
-if __name__ == "__main__":
-    # parse arguments
-    import os
-    prog = os.path.basename(__file__)
-    parser = ArgumentParser(prog=prog, parents=[])
-    args = parser.parse_args()
-    if hasattr(args, "func"):
-        args.func(args)
-    else:
-        parser.print_help() # print help if no/invalid mode specified
+# parser.set_defaults(func=main)
+# if __name__ == "__main__":
+#     # parse arguments
+#     import os
+#     prog = os.path.basename(__file__)
+#     parser = ArgumentParser(prog=prog, parents=[])
+#     args = parser.parse_args()
+#     if hasattr(args, "func"):
+#         args.func(args)
+#     else:
+#         parser.print_help() # print help if no/invalid mode specified
     
     
     

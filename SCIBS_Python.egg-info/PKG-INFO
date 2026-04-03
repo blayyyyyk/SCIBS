@@ -4,5 +4,6 @@ Version: 0.1.0
 Summary: Migrate SCIBS codebase to Python + Matlab support
 Author-email: Blake Moody <blake.moody001@umb.edu>
 Requires-Python: >=3.12
+Requires-Dist: scipy>=1.17.1
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"

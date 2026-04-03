@@ -1,9 +1,11 @@
+from typing import Optional
+from scibs.utils import write_pot
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import pyvista as pv
 
-from src.utils import write_pot
+from src.scibs.utilities.file import write_tri, read_tri
 
 # ==========================================
 # FILE IO 
@@ -51,16 +53,10 @@ def get_args():
     
     return parser.parse_args()
 
-# ==========================================
-# VISUALIZATION
-# ==========================================
 
 def visualize_mesh(verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray, electrode_pts: np.ndarray):
     """Renders the mesh using PyVista for GPU-accelerated 3D visualization."""
     print("Rendering hardware-accelerated mesh visualization... (Close the window to complete execution)")
-    
-    # PyVista expects the faces array to be padded with the number of vertices per face (3 for triangles)
-    # Format: [3, v0, v1, v2, 3, v0, v1, v2...]
     padding = np.full((len(faces), 1), 3, dtype=np.int64)
     pv_faces = np.hstack((padding, faces)).flatten()
     
@@ -104,10 +100,6 @@ def visualize_mesh(verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray
         
     plotter.add_legend()
     plotter.show()
-
-# ==========================================
-# MESH SUBDIVISION LOGIC
-# ==========================================
 
 def apply_electrodes(verts: np.ndarray, faces: np.ndarray, electrode_pts: np.ndarray, electrode_radii: np.ndarray):
     """
@@ -194,19 +186,13 @@ def apply_electrodes(verts: np.ndarray, faces: np.ndarray, electrode_pts: np.nda
         
     return verts, faces, face_labels
 
-# ==========================================
-# MAIN EXECUTION
-# ==========================================
-
-def main():
-    args = get_args()
-
+def trielec(elec_descr_in: str, tri_in: str, tri_out: str, elec_out: str, on_vert: bool, angle: float, warp_name: float, show_plot: bool = False):
     # 1. Load Data
-    tri_verts, tri_ids = load_tri(args.tri_in)
+    tri_verts, tri_ids = load_tri(tri_in)
     tri_ids = tri_ids - 1  
 
     electrode = np.loadtxt(
-        args.elec_descr,
+        elec_descr_in,
         skiprows=1,
         usecols=(1, 2, 3, 4),
         ndmin=2,
@@ -215,32 +201,30 @@ def main():
     electrode_pts, electrode_radii = np.split(electrode, [3], axis=1)
     electrode_radii = electrode_radii.flatten()
 
-    # 2. Process Mesh
+    # process mesh
     tri_verts, tri_ids, face_labels = apply_electrodes(
         tri_verts, tri_ids, electrode_pts, electrode_radii
     )
 
-    # 3. Validation Plot (Optional)
-    if args.plot:
-        visualize_mesh(tri_verts, tri_ids, face_labels, electrode_pts)
+    # save modified mesh
+    write_tri(tri_out, tri_verts, tri_ids)
 
-    # 4. Save modified mesh
-    save_tri(args.tri_out, tri_verts, tri_ids)
-
-    # 5. Save mapping matrix
-    if args.onVert:
+    # save mapping matrix to .pot file
+    # TODO: fix broken file format
+    if on_vert:
         vert_labels = np.full((len(tri_verts), 1), np.nan)
         for i, (center, radius) in enumerate(zip(electrode_pts, electrode_radii)):
             dists = np.linalg.norm(tri_verts - center, axis=1)
             vert_labels[dists <= radius + 1e-7] = i + 1
             
-        print(vert_labels)
-        write_pot(args.elec_out, vert_labels)
+        write_pot(elec_out, vert_labels)
     else:
         out_labels = np.full((len(face_labels), 1), np.nan)
         mask = face_labels != -1
         out_labels[mask] = (face_labels[mask] + 1)[:, None]
-        write_pot(args.elec_out, out_labels)
+        write_pot(elec_out, out_labels)
+        
+    if show_plot:
+        visualize_mesh(tri_verts, tri_ids, face_labels, electrode_pts)
 
-if __name__ == "__main__":
-    main()
+

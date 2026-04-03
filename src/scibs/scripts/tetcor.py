@@ -2,7 +2,7 @@ import scipy.io as sio
 import numpy as np
 from argparse import ArgumentParser
 import os
-from src.utils import is_model
+from scibs.utilities.mat import is_model
 
 def calculate_signed_volumes(pts, ids):
     # check if ids are 1-indexed
@@ -51,6 +51,24 @@ def correct_tetrahedrons(pts: np.ndarray, ids: np.ndarray) -> tuple[np.ndarray, 
 
     return ids, n_corrected
 
+
+def tetcor(file_name: str, struct_name: str, output: str):
+    struct_names = []
+    mat_contents = sio.loadmat(file_name)
+
+    for i, (struct_name, struct_content) in enumerate(mat_contents.values()):
+        if struct_name is not None and struct_name != struct_name: continue
+        if not is_model(struct_content): continue
+        print(f"Correct struct {struct_name} ({i+1}, {len(struct_names)})")
+        output_file_name = output if output else f"{os.path.dirname(file_name)}.{file_name.split('.')[-1]}"
+        pts, ids = unpack_tets(mat_contents, struct_name)
+        print(f"Number of total volumes: {len(ids)}")
+        new_ids, n_corrected = correct_tetrahedrons(pts, ids)
+        print(f"Number of corrected volumes: {n_corrected}")
+        save_tets(mat_contents, output_file_name, pts, new_ids, struct_name)
+        print(f"Output saved at {output_file_name}")
+
+
 def main():
     parser = ArgumentParser(
         prog='tetcor',
@@ -61,20 +79,7 @@ def main():
     parser.add_argument('-o', '--output', help="Output file to write to. Defaults to `{file_name}_corrected.mat`")
     args = parser.parse_args()
 
-    struct_names = []
-    mat_contents = sio.loadmat(args.file_name)
-
-    for i, (struct_name, struct_content) in enumerate(mat_contents.values()):
-        if args.struct_name is not None and args.struct_name != struct_name: continue
-        if not is_model(struct_content): continue
-        print(f"Correct struct {struct_name} ({i+1}, {len(struct_names)})")
-        output_file_name = args.output if args.output else f"{os.path.dirname(args.file_name)}.{args.file_name.split('.')[-1]}"
-        pts, ids = unpack_tets(mat_contents, struct_name)
-        print(f"Number of total volumes: {len(ids)}")
-        new_ids, n_corrected = correct_tetrahedrons(pts, ids)
-        print(f"Number of corrected volumes: {n_corrected}")
-        save_tets(mat_contents, output_file_name, pts, new_ids, struct_name)
-        print(f"Output saved at {output_file_name}")
+    
 
 
 if __name__ == "__main__":
