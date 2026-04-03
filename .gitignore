@@ -12,3 +12,4 @@
 **/*.mat
 
 out/**/*
+code_artifacts/**
