@@ -1,8 +1,11 @@
-import scipy.io as sio
-import numpy as np
-from argparse import ArgumentParser
 import os
+from argparse import ArgumentParser
+
+import numpy as np
+import scipy.io as sio
+
 from scibs.utilities.mat import is_model
+
 
 def calculate_signed_volumes(pts, ids):
     # check if ids are 1-indexed
@@ -79,7 +82,7 @@ def main():
     parser.add_argument('-o', '--output', help="Output file to write to. Defaults to `{file_name}_corrected.mat`")
     args = parser.parse_args()
 
-    
+
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from numpy.typing import ArrayLike
 from typing import Callable, Optional, Sequence, Iterable
+import struct
 
 import numpy as np
 import scipy.io as sio
@@ -115,3 +116,43 @@ def write_tot(out_path: str, tet_of_tri: np.ndarray, local_nodes: np.ndarray):
     ], axis=-1) # save as 1-indexed
     out = np.concat([r_stack, local_nodes + 1], axis=-1)
     np.savetxt(out_path, out, fmt='%d', delimiter=' ', header=str(len(tet_of_tri)), comments='')
+
+def read_pot(in_path: str, dtype=None):
+    with open(in_path, 'rb') as f:
+        header = f.read(8)
+        assert header.startswith(b';;mbfmat'), "invalid file format"
+        f.seek(8, 1) # skip a double
+        nr = struct.unpack('<i', f.read(4))[0]
+        nc = struct.unpack('<i', f.read(4))[0]
+        mat = np.fromfile(f, "<d")
+        if nc > 1:
+            mat = mat.reshape(nr, nc)
+            
+        if dtype:
+            mat = mat.astype(dtype)
+        
+        return mat
+
+def write_pot(out_path: str, data: np.ndarray):
+    """
+    Writes a 1D numpy array to a .pot file matching the format of read_pot.
+    """
+    # ensure flattness
+    data = np.asarray(data).astype(np.float64).flatten()
+    
+    nr = len(data)
+    nc = 1  # strictly saving a 1D array w/ 1 column
+    
+    with open(out_path, 'wb') as f:
+        # write header
+        f.write(b';;mbfmat') # 8 bytes
+        
+        # write empty placeholder padding
+        f.write(struct.pack('<d', 0.0)) # 8 bytes
+        
+        # write number of rows and columns
+        f.write(struct.pack('<i', nr)) # little-endian, int, 32-bit
+        f.write(struct.pack('<i', nc)) # little-endian, int, 32-bit
+        
+        # write the matrix data
+        data.astype('<d').tofile(f) # little-endian, float, 64-bit  

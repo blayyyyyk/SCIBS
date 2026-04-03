@@ -1,18 +1,10 @@
-from typing import Optional
-from src.scibs.utilities.file import read_pts, read_tet, write_el, write_tot, write_tri
 from argparse import ArgumentParser
-import numpy as np
 from functools import partial
+from typing import Optional
 
+import numpy as np
 
-# # Process Mode Parsing #
-# parser = ArgumentParser(usage="tet2tri [-options] ptsName tetName triName [elName [totName]]\n\ttet2tri [-options] name", add_help=False)
-# parser.add_argument('-s', help="output surface triangles only", action="store_true")
-# parser.add_argument("ptsName", type=str)
-# parser.add_argument("tetName", nargs="?", type=str)
-# parser.add_argument("triName", nargs="?", type=str)
-# parser.add_argument("elName", nargs="?", type=str)
-# parser.add_argument("totName", nargs="?", type=str)
+from src.scibs.utilities.file import read_pts, read_tet, write_el, write_tot, write_tri
 
 
 def tet2tri(pts_name: str, tet_name: Optional[str] = None, tri_name: Optional[str] = None, el_name: Optional[str] = None, tot_name: Optional[str] = None, surface_only: bool = False, verbose: bool = False):
@@ -22,11 +14,11 @@ def tet2tri(pts_name: str, tet_name: Optional[str] = None, tri_name: Optional[st
     elif not any(opt_kwargs[:2]):
         tet_name = pts_name
         tri_name = pts_name
-        
+
     if surface_only and not any(opt_kwargs):
         el_name = pts_name
         tot_name = pts_name
-        
+
     tet_pts = read_pts(f"{pts_name}.pts")
     tet_ids = read_tet(f"{tet_name}.tet")
 
@@ -86,10 +78,10 @@ def tet2tri(pts_name: str, tet_name: Optional[str] = None, tri_name: Optional[st
 
     else:
         tri_ids = faces
-        
+
     if verbose:
         print(f"Writing {len(tri_ids)} triangles to {tri_name}.tri ...")
-    
+
     write_tri(f"{tri_name}.tri", tet_pts, tri_ids)
 
     if verbose:
@@ -107,6 +99,3 @@ def tet2tri(pts_name: str, tet_name: Optional[str] = None, tri_name: Optional[st
 #         args.func(args)
 #     else:
 #         parser.print_help() # print help if no/invalid mode specified
-    
-    
-    
