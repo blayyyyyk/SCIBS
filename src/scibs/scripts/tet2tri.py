@@ -86,16 +86,3 @@ def tet2tri(pts_name: str, tet_name: Optional[str] = None, tri_name: Optional[st
 
     if verbose:
         print(f"Done.")
-
-
-# parser.set_defaults(func=main)
-# if __name__ == "__main__":
-#     # parse arguments
-#     import os
-#     prog = os.path.basename(__file__)
-#     parser = ArgumentParser(prog=prog, parents=[])
-#     args = parser.parse_args()
-#     if hasattr(args, "func"):
-#         args.func(args)
-#     else:
-#         parser.print_help() # print help if no/invalid mode specified
