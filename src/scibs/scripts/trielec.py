@@ -1,8 +1,13 @@
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import pyvista as pv
 
+from src.utils import write_pot
+
+# ==========================================
+# FILE IO 
+# ==========================================
 
 def load_tri(path: str) -> tuple[np.ndarray, np.ndarray]:
     """Loads a custom .tri file into vertices and face indices."""
@@ -46,69 +51,63 @@ def get_args():
     
     return parser.parse_args()
 
+# ==========================================
+# VISUALIZATION
+# ==========================================
 
 def visualize_mesh(verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray, electrode_pts: np.ndarray):
-    """Renders the mesh using Matplotlib to visually validate subdivisions."""
-    print("Rendering mesh visualization... (Close the window to complete execution)")
-    fig = plt.figure(figsize=(12, 10))
-    ax = fig.add_subplot(111, projection='3d')
-
-    unique_labels = np.unique(face_labels)
-    # Generate a colormap for different electrodes
-    colors = plt.cm.get_cmap('tab10', len(unique_labels))
-
-    # Plot faces by their assigned electrode label
-    for i, label in enumerate(unique_labels):
-        mask = face_labels == label
-        subset_faces = faces[mask]
+    """Renders the mesh using PyVista for GPU-accelerated 3D visualization."""
+    print("Rendering hardware-accelerated mesh visualization... (Close the window to complete execution)")
+    
+    # PyVista expects the faces array to be padded with the number of vertices per face (3 for triangles)
+    # Format: [3, v0, v1, v2, 3, v0, v1, v2...]
+    padding = np.full((len(faces), 1), 3, dtype=np.int64)
+    pv_faces = np.hstack((padding, faces)).flatten()
+    
+    # Create the mesh object
+    mesh = pv.PolyData(verts, pv_faces)
+    
+    # Assign our calculated electrode IDs directly to the mesh faces (cells)
+    mesh.cell_data["Electrode_ID"] = face_labels
+    
+    # Split the mesh into two parts so we can style them differently, just like the matplotlib version
+    base_mask = face_labels == -1
+    base_mesh = mesh.extract_cells(base_mask)
+    elec_mesh = mesh.extract_cells(~base_mask)
+    
+    plotter = pv.Plotter()
+    
+    # Plot the base brain/surface mesh: transparent, gray, no heavy wireframe to save performance
+    if base_mesh.n_cells > 0:
+        plotter.add_mesh(base_mesh, color='lightgray', opacity=0.3, show_edges=False)
+    
+    # Plot the subdivided electrode patches: opaque, colored by unique ID, with black wireframes
+    if elec_mesh.n_cells > 0:
+        plotter.add_mesh(
+            elec_mesh, 
+            scalars="Electrode_ID", 
+            cmap="turbo", 
+            show_edges=True, 
+            edge_color="black", 
+            line_width=1.5
+        )
         
-        # Base mesh (label -1) is drawn faint and transparent
-        if label == -1:
-            face_color = (0.8, 0.8, 0.8, 0.3) 
-            edge_color = (0.5, 0.5, 0.5, 0.1)
-            line_width = 0.5
-        # Electrode patches are drawn opaque with bold wireframes
-        else:
-            face_color = colors(i)[:3] + (0.9,) 
-            edge_color = 'black'
-            line_width = 1.0 
-
-        # Create 3D polygon collection
-        mesh_col = Poly3DCollection(verts[subset_faces], alpha=0.8)
-        mesh_col.set_facecolor(face_color)
-        mesh_col.set_edgecolor(edge_color)
-        mesh_col.set_linewidth(line_width)
-        ax.add_collection3d(mesh_col)
-
-    # Plot the exact center points of the electrodes
+    # Drop the red center points into the scene
     if len(electrode_pts) > 0:
-        ax.scatter(electrode_pts[:, 0], electrode_pts[:, 1], electrode_pts[:, 2], 
-                   color='red', s=50, label='Electrode Centers', zorder=5)
+        plotter.add_points(
+            electrode_pts, 
+            color="red", 
+            point_size=12, 
+            render_points_as_spheres=True,
+            label="Electrode Centers"
+        )
+        
+    plotter.add_legend()
+    plotter.show()
 
-    # Auto-scale axes to fit the geometry
-    max_range = np.array([verts[:,0].max()-verts[:,0].min(), 
-                          verts[:,1].max()-verts[:,1].min(), 
-                          verts[:,2].max()-verts[:,2].min()]).max() / 2.0
-
-    mid_x = (verts[:,0].max()+verts[:,0].min()) * 0.5
-    mid_y = (verts[:,1].max()+verts[:,1].min()) * 0.5
-    mid_z = (verts[:,2].max()+verts[:,2].min()) * 0.5
-    
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_y - max_range, mid_y + max_range)
-    ax.set_zlim(mid_z - max_range, mid_z + max_range)
-
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_title('Subdivided Mesh & Electrode Boundaries')
-    
-    # Set an isometric viewing angle
-    ax.view_init(elev=30, azim=45)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
+# ==========================================
+# MESH SUBDIVISION LOGIC
+# ==========================================
 
 def apply_electrodes(verts: np.ndarray, faces: np.ndarray, electrode_pts: np.ndarray, electrode_radii: np.ndarray):
     """
@@ -123,6 +122,7 @@ def apply_electrodes(verts: np.ndarray, faces: np.ndarray, electrode_pts: np.nda
         new_verts = []
         edge_intersections = {}
         
+        # --- PASS 1: Identify crossing edges ---
         for face in faces:
             d = dists[face]
             signs = d < 0
@@ -145,6 +145,7 @@ def apply_electrodes(verts: np.ndarray, faces: np.ndarray, electrode_pts: np.nda
         if new_verts:
             verts = np.vstack([verts, new_verts])
 
+        # --- PASS 2: Rebuild face list ---
         new_faces = []
         new_face_labels = []
         
@@ -193,6 +194,10 @@ def apply_electrodes(verts: np.ndarray, faces: np.ndarray, electrode_pts: np.nda
         
     return verts, faces, face_labels
 
+# ==========================================
+# MAIN EXECUTION
+# ==========================================
+
 def main():
     args = get_args()
 
@@ -210,24 +215,32 @@ def main():
     electrode_pts, electrode_radii = np.split(electrode, [3], axis=1)
     electrode_radii = electrode_radii.flatten()
 
+    # 2. Process Mesh
     tri_verts, tri_ids, face_labels = apply_electrodes(
         tri_verts, tri_ids, electrode_pts, electrode_radii
     )
 
+    # 3. Validation Plot (Optional)
+    if args.plot:
+        visualize_mesh(tri_verts, tri_ids, face_labels, electrode_pts)
+
+    # 4. Save modified mesh
     save_tri(args.tri_out, tri_verts, tri_ids)
 
-    # save label matrix (i.e. '.pot' file)
+    # 5. Save mapping matrix
     if args.onVert:
         vert_labels = np.full((len(tri_verts), 1), np.nan)
         for i, (center, radius) in enumerate(zip(electrode_pts, electrode_radii)):
             dists = np.linalg.norm(tri_verts - center, axis=1)
             vert_labels[dists <= radius + 1e-7] = i + 1
-        np.savetxt(args.elec_out, vert_labels, fmt='%s')
+            
+        print(vert_labels)
+        write_pot(args.elec_out, vert_labels)
     else:
         out_labels = np.full((len(face_labels), 1), np.nan)
         mask = face_labels != -1
         out_labels[mask] = (face_labels[mask] + 1)[:, None]
-        np.savetxt(args.elec_out, out_labels, fmt='%s')
+        write_pot(args.elec_out, out_labels)
 
 if __name__ == "__main__":
     main()

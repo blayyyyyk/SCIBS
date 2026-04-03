@@ -2,7 +2,7 @@ import scipy.io as sio
 import numpy as np
 from argparse import ArgumentParser
 import os
-from utils import is_model
+from src.utils import is_model
 
 def calculate_signed_volumes(pts, ids):
     # check if ids are 1-indexed
@@ -17,7 +17,7 @@ def calculate_signed_volumes(pts, ids):
     jacobian_det = np.sum(e2 * cross, axis=1)
     return jacobian_det / 6.0 # volume is 1/6 of jacobian
 
-def load_tetrahedrons(mat_contents, struct_name) -> tuple[np.ndarray, np.ndarray]:
+def unpack_tets(mat_contents, struct_name) -> tuple[np.ndarray, np.ndarray]:
     pts = mat_contents[struct_name]['node'][0, 0]
     ids = mat_contents[struct_name]['cell'][0, 0]
     return pts, ids
@@ -26,7 +26,7 @@ def load_tetrahedrons(mat_contents, struct_name) -> tuple[np.ndarray, np.ndarray
 
 
 
-def save_tetrahedrons(mat_contents, output_matlab_file_name: str, new_pts: np.ndarray, new_ids: np.ndarray, struct_name: str):
+def save_tets(mat_contents, output_matlab_file_name: str, new_pts: np.ndarray, new_ids: np.ndarray, struct_name: str):
     mat_contents[struct_name]['node'][0, 0] = new_pts
     mat_contents[struct_name]['cell'][0, 0] = new_ids
 
@@ -69,12 +69,11 @@ def main():
         if not is_model(struct_content): continue
         print(f"Correct struct {struct_name} ({i+1}, {len(struct_names)})")
         output_file_name = args.output if args.output else f"{os.path.dirname(args.file_name)}.{args.file_name.split('.')[-1]}"
-        pts, ids = load_tetrahedrons(mat_contents, struct_name)
+        pts, ids = unpack_tets(mat_contents, struct_name)
         print(f"Number of total volumes: {len(ids)}")
         new_ids, n_corrected = correct_tetrahedrons(pts, ids)
         print(f"Number of corrected volumes: {n_corrected}")
-        struct_name +=
-        save_tetrahedrons(mat_contents, output_file_name, pts, new_ids, struct_name)
+        save_tets(mat_contents, output_file_name, pts, new_ids, struct_name)
         print(f"Output saved at {output_file_name}")
 
 
