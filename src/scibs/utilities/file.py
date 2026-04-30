@@ -8,51 +8,35 @@ import scipy.io as sio
 from .mat import is_model
 
 
-def _read_mat(in_path: str, struct_filter: Optional[Callable[[str], bool]] = None) -> dict[str, np.ndarray]:
-    mat_contents = sio.loadmat(in_path)
-    out = {}
-    for i, (struct_name, struct_content) in enumerate(mat_contents.values()):
-        # check if struct is what we want
-        if struct_filter is not None:
-            if not struct_filter(struct_name): continue
+def write_mat(file_prefix: str, pts: np.ndarray, ids: np.ndarray, struct_name: str):
+    mat_contents = sio.loadmat(f"{file_prefix}.mat")
+    
+    if not is_model(mat_contents[struct_name]):
+        raise ValueError(f"Struct {struct_name} is not a valid model")
+    
+    mat_contents[struct_name]['node'][0, 0] = pts
+    mat_contents[struct_name]['cell'][0, 0] = ids
 
-        # check if struct is a valid model
-        if not is_model(struct_content): continue
+    # remove metadata to avoid warnings
+    try:
+        for key in ['__header__', '__version__', '__globals__']:
+            mat_contents.pop(key, None)
+    except:
+        pass
 
-        out[struct_name] = mat_contents[struct_name]
-
-    return out
-
-def _write_mat(out_path: str, data: dict[str, np.ndarray]) -> None:
-    mat_contents = sio.loadmat(out_path)
-    for k, v in data.items():
-        if not k in mat_contents: continue
-        mat_contents[k] = v
-
-    for key in ['__header__', '__version__', '__globals__']:
-        if not k in mat_contents: continue
-        mat_contents.pop(key, None)
-
-    sio.savemat(out_path, mat_contents)
+    sio.savemat(f"{file_prefix}_E.mat", mat_contents)
 
 
-def read_tet_mat(in_path: str) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-    mat_contents = _read_mat(in_path)
-    out = {}
-    for k, v in mat_contents.items():
-        pts = mat_contents[k]['node'][0, 0]
-        ids = mat_contents[k]['cell'][0, 0]
-        out[k] = (pts, ids)
+def read_mat(file_name: str, struct_name: str) -> tuple[np.ndarray, np.ndarray]:
+    mat_contents = sio.loadmat(file_name)
+    
+    if not is_model(mat_contents[struct_name]):
+        raise ValueError(f"Struct {struct_name} is not a valid model")
+    
+    pts = mat_contents[struct_name]['node'][0, 0]
+    ids = mat_contents[struct_name]['cell'][0, 0]
+    return pts, ids
 
-    return out
-
-def write_tet(out_path: str, data):
-    reshape = {}
-    for k, (pts, ids) in data.items():
-        dtype = np.dtype([('node', pts.dtype), ('cell', ids.dtype)])
-        reshape[k] = np.array([(pts, ids)], dtype=dtype)
-
-    _write_mat(out_path, reshape)
 
 def read_tri(in_path: str) -> tuple[np.ndarray, np.ndarray]:
     """Loads a custom .tri file into vertices and face indices."""
@@ -64,7 +48,7 @@ def read_tri(in_path: str) -> tuple[np.ndarray, np.ndarray]:
     )
     ids = np.loadtxt(
         in_path, skiprows=vert_count + 2, usecols=(1, 2, 3), dtype=np.int64
-    )
+    ) - 1
     return verts, ids
 
 
@@ -109,13 +93,18 @@ def write_el(out_path: str, mapping_indices: np.ndarray):
     ], axis=1)
     np.savetxt(out_path, out, fmt='%d', delimiter=' ', header=str(len(mapping_indices)), comments='')
 
-def write_tot(out_path: str, tet_of_tri: np.ndarray, local_nodes: np.ndarray):
+def write_tot(out_path: str, data: np.ndarray):
     """Writes the .tot format"""
-    r_stack = np.stack([
-        np.arange(len(tet_of_tri)), tet_of_tri + 1
+    out = np.concat([
+        np.arange(len(data))[:, None], data + 1
     ], axis=-1) # save as 1-indexed
-    out = np.concat([r_stack, local_nodes + 1], axis=-1)
-    np.savetxt(out_path, out, fmt='%d', delimiter=' ', header=str(len(tet_of_tri)), comments='')
+    np.savetxt(out_path, out, fmt='%d', delimiter=' ', header=str(len(data)), comments='')
+
+def read_tot(in_path: str):
+    return np.loadtxt(in_path, skiprows=1, usecols=[1, 2, 3, 4], dtype=np.int32, comments=None) - 1
+
+def read_el(in_path: str):
+    return np.loadtxt(in_path, skiprows=1, usecols=[1], dtype=np.int32, comments=None)
 
 def read_pot(in_path: str, dtype=None):
     with open(in_path, 'rb') as f:
@@ -155,4 +144,26 @@ def write_pot(out_path: str, data: np.ndarray):
         f.write(struct.pack('<i', nc)) # little-endian, int, 32-bit
         
         # write the matrix data
-        data.astype('<d').tofile(f) # little-endian, float, 64-bit  
+        data.astype('<d').tofile(f) # little-endian, float, 64-bit
+        
+        
+def write_tetwarp(out_path, history):
+    with open(out_path, 'w') as f:
+        f.write(f"{len(history)} 5\n")
+        for h in history:
+            f.write(f"{h[0] + 1:>8} {h[1]:>8} {h[2] + 1:>8} {h[3] + 1:>8} {h[4] if len(h) > 4 else 0:>8}\n")
+            
+        f.close()
+
+
+def read_electrode_descr(in_path: str):
+    electrode = np.loadtxt(
+        in_path,
+        skiprows=1,
+        usecols=(1, 2, 3, 4),
+        ndmin=2,
+        comments=["height", "n layers"],
+    )
+    electrode_pts, electrode_radii = np.split(electrode, [3], axis=1)
+    electrode_radii = electrode_radii.flatten()
+    return electrode_pts, electrode_radii

@@ -708,7 +708,7 @@ wheels = [
 ]
 
 [[package]]
-name = "scibs-python"
+name = "scibs"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

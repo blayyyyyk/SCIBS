@@ -1,3 +1,4 @@
+from typing import Optional
 import os
 from argparse import ArgumentParser
 
@@ -42,7 +43,7 @@ def save_tets(mat_contents, output_matlab_file_name: str, new_pts: np.ndarray, n
 
     sio.savemat(output_matlab_file_name, mat_contents)
 
-def correct_tetrahedrons(pts: np.ndarray, ids: np.ndarray) -> tuple[np.ndarray, int]:
+def tetcor(pts: np.ndarray, ids: np.ndarray) -> tuple[np.ndarray, int]:
     volumes = calculate_signed_volumes(pts, ids)
     negative_ids = np.where(volumes < 0)[0]
     n_corrected = len(negative_ids)
@@ -55,35 +56,27 @@ def correct_tetrahedrons(pts: np.ndarray, ids: np.ndarray) -> tuple[np.ndarray, 
     return ids, n_corrected
 
 
-def tetcor(file_name: str, struct_name: str, output: str):
-    struct_names = []
+def main(file_name, output, struct_name: Optional[str] = None):
     mat_contents = sio.loadmat(file_name)
+    print(mat_contents)
 
-    for i, (struct_name, struct_content) in enumerate(mat_contents.values()):
-        if struct_name is not None and struct_name != struct_name: continue
+    # load from matlab file
+    contents = {}
+    for _struct_name, struct_content in mat_contents.items():
         if not is_model(struct_content): continue
-        print(f"Correct struct {struct_name} ({i+1}, {len(struct_names)})")
-        output_file_name = output if output else f"{os.path.dirname(file_name)}.{file_name.split('.')[-1]}"
-        pts, ids = unpack_tets(mat_contents, struct_name)
-        print(f"Number of total volumes: {len(ids)}")
-        new_ids, n_corrected = correct_tetrahedrons(pts, ids)
-        print(f"Number of corrected volumes: {n_corrected}")
-        save_tets(mat_contents, output_file_name, pts, new_ids, struct_name)
-        print(f"Output saved at {output_file_name}")
+        if struct_name and struct_name != _struct_name: continue
+        _name = struct_name if struct_name else _struct_name
+        contents[_name] = unpack_tets(mat_contents, _name)
 
+    # run tetcor
+    out = {}
+    for name, (pts, ids) in contents.items():
+        pts_copy = pts.copy()
+        new_ids, _n_corrected = tetcor(pts_copy, ids)
+        out[name] = (pts_copy, new_ids)
 
-def main():
-    parser = ArgumentParser(
-        prog='tetcor',
-        description="Usage: Corrects a matlab file to assure all\ntetrahedron are oriented similarly."
-    )
-    parser.add_argument('file_name', help="The matlab tetrahedron file to read from (.mat).")
-    parser.add_argument('-s', '--struct-name', help="Matlab struct name (i.e. HeadModel, Geometry).")
-    parser.add_argument('-o', '--output', help="Output file to write to. Defaults to `{file_name}_corrected.mat`")
-    args = parser.parse_args()
+    # write output to matlab file
+    for _struct_name, (new_pts, new_ids) in out.items():
+        save_tets(mat_contents, output, new_pts, new_ids, _struct_name)
 
-
-
-
-if __name__ == "__main__":
-    main()
+    print(f"Output saved at {output}")
