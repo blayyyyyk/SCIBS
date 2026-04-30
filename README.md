@@ -17,8 +17,8 @@ To install the package and its dependencies (`matplotlib`, `pyvista`, `scipy`):
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
-cd scibs
+git clone https://github.com/blayyyyyk/SCIBS
+cd SCIBS
 
 # Install the package
 pip install .
@@ -27,7 +27,7 @@ pip install .
 If you plan on running tests or contributing to the codebase, install the development dependencies:
 
 ```bash
-pip install .[dev]
+pip install -e .
 ```
 
 ## Usage
