@@ -14,24 +14,24 @@ def parse(line: str):
         parts = line.split()
         face_count = int(parts[5])
         
-        face_orig = int(parts[1]) - 1
-        n1 = int(parts[2]) - 1
-        n2 = int(parts[3]) - 1
-        n3 = int(parts[4]) - 1
+        face_orig = int(parts[1])
+        n1 = int(parts[2])
+        n2 = int(parts[3])
+        n3 = int(parts[4])
         
         new_faces = []
         for f, sn1, sn2, sn3 in batched(parts[6:], 4):
-            new_faces.append([int(f) - 1, int(sn1) - 1, int(sn2) - 1, int(sn3) - 1])
+            new_faces.append([int(f), int(sn1), int(sn2), int(sn3)])
             
         return "split", face_orig, n1, n2, n3, new_faces
         
     elif line.startswith("m"):
         parts = line.split()
-        return "move", int(parts[1]) - 1, float(parts[2]), float(parts[3]), float(parts[4])
+        return "move", int(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
         
     elif line.startswith("a"):
         parts = line.split()
-        return "add", int(parts[1]) - 1, float(parts[2]), float(parts[3]), float(parts[4])
+        return "add", int(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
     
     return None
 
@@ -195,7 +195,7 @@ def tetwarp(pts, el_map, tot_map, tets, warp_lines: list[str]):
         func(*args)
         count += 1
             
-    return np.array(pts), np.array(tets), tet_warp_history
+    return np.array(pts), np.array(tets), tet_warp_history, np.array(el_map)
 
 
 def main(file_prefix: str):
@@ -217,4 +217,4 @@ def main(file_prefix: str):
     
 
 if __name__ == "__main__":
-    main("data/group/MNI152")
+    main("out/group/MNI152")

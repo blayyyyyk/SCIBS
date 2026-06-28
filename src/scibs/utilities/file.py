@@ -15,7 +15,7 @@ def write_mat(file_prefix: str, pts: np.ndarray, ids: np.ndarray, struct_name: s
         raise ValueError(f"Struct {struct_name} is not a valid model")
     
     mat_contents[struct_name]['node'][0, 0] = pts
-    mat_contents[struct_name]['cell'][0, 0] = ids
+    mat_contents[struct_name]['cell'][0, 0] = ids + 1
 
     # remove metadata to avoid warnings
     try:
@@ -34,7 +34,8 @@ def read_mat(file_name: str, struct_name: str) -> tuple[np.ndarray, np.ndarray]:
         raise ValueError(f"Struct {struct_name} is not a valid model")
     
     pts = mat_contents[struct_name]['node'][0, 0]
-    ids = mat_contents[struct_name]['cell'][0, 0]
+    ids = mat_contents[struct_name]['cell'][0, 0] - 1
+    
     return pts, ids
 
 
