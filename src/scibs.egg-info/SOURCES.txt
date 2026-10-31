@@ -11,6 +11,7 @@ src/scibs.egg-info/top_level.txt
 src/scibs/scripts/__init__.py
 src/scibs/scripts/elecpatch.py
 src/scibs/scripts/elecpotsurf.py
+src/scibs/scripts/make_egghead.py
 src/scibs/scripts/pipeline.py
 src/scibs/scripts/tet2tri.py
 src/scibs/scripts/tetcor.py

@@ -11,7 +11,7 @@ from scibs.scripts.trielec import trielec
 
 # Utility imports
 from scibs.utilities.file import (
-    desktop_output_dir,
+    output_dir,
     read_electrode_descr,
     read_mat,
     write_mat,
@@ -25,11 +25,12 @@ def pipeline(
 ):
     start = time()
 
-    # Route the final mesh/potentials and the visualization screenshots to
-    # the Desktop instead of alongside the (possibly read-only/shared) source
-    # data, so results are easy to find regardless of where the input lives.
+    # Route the final mesh/potentials and the visualization screenshots to the
+    # project's own `out/` folder instead of alongside the (possibly
+    # read-only/shared) source data, so results are easy to find regardless of
+    # where the input lives.
     run_name = Path(file_prefix).name
-    output_prefix = str(desktop_output_dir() / run_name)
+    output_prefix = str(output_dir() / run_name)
     
     print("Loading mesh")
     tet_pts, tet_ids = read_mat(f"{file_prefix}.mat", struct_name)

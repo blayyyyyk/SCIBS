@@ -14,7 +14,7 @@ alongside the mesh output.
 
 import numpy as np
 
-from scibs.utilities.file import desktop_output_dir
+from scibs.utilities.file import output_dir
 
 
 def elecpotsurf(
@@ -75,8 +75,8 @@ def elecpotsurf(
 
     pots[flat_nodes[in_range]] = labels[in_range]
 
-    # Force direct extraction dump to the shared Desktop output folder during function execution
-    extraction_path = str(desktop_output_dir() / "extraction_elecpotsurf.txt")
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_elecpotsurf.txt")
     print(f"Dumping extraction data directly to: {extraction_path}")
     with open(extraction_path, "w") as f:
         f.write("=== NODE POTENTIALS (electrode id per volumetric node) ===\n")

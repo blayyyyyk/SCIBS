@@ -22,7 +22,7 @@ pipeline end-to-end complete.
 from collections import defaultdict
 import numpy as np
 
-from scibs.utilities.file import desktop_output_dir
+from scibs.utilities.file import output_dir
 
 def _patch_vertex_normals(
     pts: np.ndarray, vol_faces: np.ndarray, patch_nodes: np.ndarray, centroid: np.ndarray
@@ -156,8 +156,8 @@ def elecpatch(
     if new_tets:
         tet_ids = np.vstack([tet_ids, np.array(new_tets, dtype=np.int64)])
 
-    # Force direct extraction dump to the shared Desktop output folder during function execution
-    extraction_path = str(desktop_output_dir() / "extraction_elecpatch.txt")
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_elecpatch.txt")
     print(f"Dumping extraction data directly to: {extraction_path}")
     with open(extraction_path, "w") as f:
         f.write("=== FINAL TET POINTS (incl. extruded pads) ===\n")

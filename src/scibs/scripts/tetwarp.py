@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import Literal
 from argparse import ArgumentParser
 import numpy as np
-from scibs.utilities.file import desktop_output_dir, read_pts, read_tet, read_el, read_tot, write_tetwarp
+from scibs.utilities.file import output_dir, read_pts, read_tet, read_el, read_tot, write_tetwarp
 
 
 def parse(line: str):
@@ -237,8 +237,8 @@ def tetwarp(pts, el_map, tot_map, tets, warp_lines: list[str]):
     final_tets = np.array(tets)
     final_el_map = np.array(el_map)
 
-    # Force direct extraction dump to the shared Desktop output folder during function execution
-    extraction_path = str(desktop_output_dir() / "extraction_tetwarp.txt")
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_tetwarp.txt")
     print(f"Dumping extraction data directly to: {extraction_path}")
     with open(extraction_path, "w") as f:
         f.write("=== FINAL POINTS ===\n")

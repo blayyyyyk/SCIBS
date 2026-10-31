@@ -35,6 +35,20 @@ trielec_parser.add_argument(
          "spheres, layered on top of the always-on exact mesh-edge check. Unset by "
          "default (the exact check alone is the real correctness requirement)."
 )
+trielec_parser.add_argument(
+    "--symmetry-axis", choices=("x", "y", "z"), default=None,
+    help="Reflect electrode geometry across a plane normal to this axis, making "
+         "paired electrodes exact mirrors before any mesh intersection."
+)
+trielec_parser.add_argument(
+    "--symmetry-plane", type=float, default=0.0,
+    help="Coordinate of the symmetry plane along --symmetry-axis. Default: 0."
+)
+trielec_parser.add_argument(
+    "--symmetry-pairs", type=str, default=None,
+    help='Explicit 1-based electrode pairs to mirror, e.g. "1:2,3:4". Required '
+         "unless there are exactly two electrodes, which are paired automatically."
+)
 trielec_parser.set_defaults(func=trielec.main)
 
 # tetcor.py #

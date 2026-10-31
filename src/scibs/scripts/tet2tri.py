@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from functools import partial
 from typing import Optional
 import numpy as np
-from scibs.utilities.file import desktop_output_dir, read_pts, read_tet, write_el, write_tot, write_tri
+from scibs.utilities.file import output_dir, read_pts, read_tet, write_el, write_tot, write_tri
 
 def tet2tri(tet_pts: np.ndarray, tet_ids: np.ndarray, surface_only: bool = True):
     # extract the 4 faces for each tetrahedron.
@@ -57,8 +57,8 @@ def tet2tri(tet_pts: np.ndarray, tet_ids: np.ndarray, surface_only: bool = True)
     else:
         tri_ids = faces
 
-    # Force direct extraction dump to the shared Desktop output folder during function execution
-    extraction_path = str(desktop_output_dir() / "extraction_tet2tri.txt")
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_tet2tri.txt")
     print(f"Dumping extraction data directly to: {extraction_path}")
     with open(extraction_path, "w") as f:
         f.write("=== TRI IDS ===\n")

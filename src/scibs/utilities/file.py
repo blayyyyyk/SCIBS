@@ -1,25 +1,25 @@
 from numpy.typing import ArrayLike
 from typing import Callable, Optional, Sequence, Iterable
-import os
 import struct
 from pathlib import Path
 
 import numpy as np
 import scipy.io as sio
 
+from ..config import PROJECT_OUTPUT_DIR
 from .mat import is_model
 
 
-def desktop_output_dir() -> Path:
-    """Resolves `~/Desktop/SCIBS_outputs`, creating it if needed.
+def output_dir() -> Path:
+    """Resolves the project's `out/` folder, creating it if needed.
 
     Shared destination for every generated artifact (final meshes, plot
-    screenshots, debug extraction dumps) so results land in one place
-    regardless of where the source data lives.
+    screenshots, debug extraction dumps) so results land in one place --
+    next to the code that produced them -- regardless of where the source
+    data lives or which directory the command was run from.
     """
-    out_dir = Path(os.path.expanduser("~")) / "Desktop" / "SCIBS_outputs"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir
+    PROJECT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    return PROJECT_OUTPUT_DIR
 
 
 def write_mat(

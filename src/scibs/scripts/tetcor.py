@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 import numpy as np
 import scipy.io as sio
 
-from scibs.utilities.file import desktop_output_dir
+from scibs.utilities.file import output_dir
 from scibs.utilities.mat import is_model
 
 
@@ -54,8 +54,8 @@ def tetcor(pts: np.ndarray, ids: np.ndarray) -> tuple[np.ndarray, int]:
         ids[negative_ids, 2] = ids[negative_ids, 3]
         ids[negative_ids, 3] = temp
 
-    # Force direct extraction dump to the shared Desktop output folder during function execution
-    extraction_path = str(desktop_output_dir() / "extraction_tetcor.txt")
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_tetcor.txt")
     print(f"Dumping extraction data directly to: {extraction_path}")
     with open(extraction_path, "w") as f:
         f.write("=== CORRECTED TET IDS ===\n")

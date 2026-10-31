@@ -2,12 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 
-from scibs.utilities.file import desktop_output_dir, read_mat
+from scibs.utilities.file import output_dir, read_mat
 
 
-def _desktop_output_path(name: str) -> str:
-    """Resolves `~/Desktop/SCIBS_outputs/{name}.png`, creating the folder if needed."""
-    return str(desktop_output_dir() / f"{name}.png")
+def _output_path(name: str) -> str:
+    """Resolves the project's `out/{name}.png`, creating the folder if needed."""
+    return str(output_dir() / f"{name}.png")
 
 
 def visualize_mesh(
@@ -72,7 +72,7 @@ def visualize_mesh(
         )
 
     plotter.add_legend()
-    screenshot_path = _desktop_output_path(name)
+    screenshot_path = _output_path(name)
     plotter.show(screenshot=screenshot_path)
     print(f"Saved screenshot to {screenshot_path}")
 
@@ -92,7 +92,7 @@ def visualize_tet_volume(vertices: np.ndarray, tets: np.ndarray, name: str = "te
     grid = pv.UnstructuredGrid(cells, cell_types, vertices)
 
     # Plot it
-    screenshot_path = _desktop_output_path(name)
+    screenshot_path = _output_path(name)
     grid.plot(show_edges=True, opacity=1.0, color="lightgray", edge_color="green", screenshot=screenshot_path)
     print(f"Saved screenshot to {screenshot_path}")
 
@@ -176,7 +176,7 @@ def visualize_potentials(vertices: np.ndarray, tets: np.ndarray, potentials: np.
             show_points=False,
         )
 
-    screenshot_path = _desktop_output_path(name)
+    screenshot_path = _output_path(name)
     plotter.show(screenshot=screenshot_path)
     print(f"Saved screenshot to {screenshot_path}")
 

@@ -3,7 +3,7 @@ import os
 from collections import defaultdict
 from typing import Optional
 import numpy as np
-from scibs.utilities.file import desktop_output_dir, read_tri, write_pot, write_tri
+from scibs.utilities.file import output_dir, read_tri, write_pot, write_tri
 from scibs.utilities.graphics import visualize_mesh
 
 
@@ -31,6 +31,96 @@ def load_electrode_file(filepath: str) -> tuple[np.ndarray, np.ndarray]:
     electrode_pts = data[:, :3]
     electrode_radii = data[:, 3]
     return electrode_pts, electrode_radii
+
+
+def enforce_electrode_symmetry(
+    electrode_pts: np.ndarray,
+    electrode_radii: np.ndarray,
+    symmetry_axis: Optional[str] = None,
+    symmetry_plane: float = 0.0,
+    symmetry_pairs: Optional[str] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Optionally enforce exact symmetry of electrode CENTER coordinates and radii.
+
+    symmetry_axis:
+        x, y, or z.  For example, x means reflection across the plane x =
+        symmetry_plane.
+
+    symmetry_pairs:
+        Explicit 1-based electrode pairs such as "1:2,3:4".
+        For each pair, the second electrode is replaced by the exact mirror
+        of the first.  If omitted, two electrodes are paired automatically.
+
+    This makes the analytical electrode geometry symmetric.  The final
+    triangulated boundary can still differ slightly if the input head mesh
+    itself is asymmetric.
+    """
+    pts = np.asarray(electrode_pts, dtype=np.float64).copy()
+    radii = np.asarray(electrode_radii, dtype=np.float64).copy()
+
+    if symmetry_axis is None:
+        return pts, radii
+
+    axis_map = {"x": 0, "y": 1, "z": 2}
+    axis = symmetry_axis.lower()
+    if axis not in axis_map:
+        raise ValueError("symmetry_axis must be one of: x, y, z")
+
+    if len(pts) != len(radii):
+        raise ValueError("Electrode centers and radii must have the same length.")
+
+    if symmetry_pairs:
+        pairs = []
+        for item in symmetry_pairs.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                a, b = item.split(":")
+                a = int(a) - 1
+                b = int(b) - 1
+            except ValueError as exc:
+                raise ValueError(
+                    'Invalid --symmetry-pairs value. Use e.g. "1:2,3:4".'
+                ) from exc
+
+            if a < 0 or b < 0 or a >= len(pts) or b >= len(pts) or a == b:
+                raise ValueError(f"Invalid symmetry pair: {item}")
+
+            pairs.append((a, b))
+    else:
+        if len(pts) != 2:
+            raise ValueError(
+                "Automatic symmetry pairing is only supported for exactly "
+                "two electrodes. Use --symmetry-pairs for more electrodes."
+            )
+        pairs = [(0, 1)]
+
+    for a, b in pairs:
+        mirrored = pts[a].copy()
+        mirrored[axis_map[axis]] = (
+            2.0 * symmetry_plane - mirrored[axis_map[axis]]
+        )
+        pts[b] = mirrored
+        radii[b] = radii[a]
+
+    print("\n=== ELECTRODE SYMMETRY ===")
+    print(f"Reflection plane: {axis.upper()} = {symmetry_plane:.6f}")
+    for a, b in pairs:
+        delta = pts[b].copy()
+        delta[axis_map[axis]] = (
+            2.0 * symmetry_plane - delta[axis_map[axis]]
+        )
+        center_error = np.linalg.norm(pts[a] - delta)
+        radius_error = abs(radii[a] - radii[b])
+        print(
+            f"Pair {a + 1}<->{b + 1}: "
+            f"center error={center_error:.3e}, "
+            f"radius error={radius_error:.3e}"
+        )
+
+    return pts, radii
 
 
 def _triangle_quality(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
@@ -314,6 +404,22 @@ def trielec(
     (mm) layered on top of that exact check, for callers who want more
     separation than bare correctness demands.
     """
+    # Work on private copies so the caller's mesh arrays are never modified
+    # while electrode intersections are being calculated.
+    verts = np.asarray(verts, dtype=np.float64).copy()
+    faces = np.asarray(faces, dtype=np.int64).copy()
+    electrode_pts = np.asarray(electrode_pts, dtype=np.float64).copy()
+    electrode_radii = np.asarray(electrode_radii, dtype=np.float64).copy()
+
+    if len(electrode_pts) != len(electrode_radii):
+        raise ValueError("electrode_pts and electrode_radii must have the same length.")
+    if np.any(electrode_radii <= 0):
+        raise ValueError("All electrode radii must be positive.")
+    if not np.isfinite(verts).all() or not np.isfinite(electrode_pts).all():
+        raise ValueError("Mesh and electrode coordinates must be finite.")
+    if not np.isfinite(electrode_radii).all():
+        raise ValueError("Electrode radii must be finite.")
+
     warp_lines = []
     verts_list = verts.tolist()
     faces_list = faces.tolist()
@@ -391,7 +497,14 @@ def trielec(
             if (vA, vB) in edge_to_new_v:
                 continue
 
-            t = crossing_d1[i] / (crossing_d1[i] - crossing_d2[i])
+            denom = crossing_d1[i] - crossing_d2[i]
+            if abs(denom) < 1e-15:
+                # Numerically ambiguous intersection.  Leave the edge alone
+                # rather than generating an unstable point.
+                continue
+
+            t = crossing_d1[i] / denom
+            t = float(np.clip(t, 0.0, 1.0))
             p_new_calc = verts[vA] + t * (verts[vB] - verts[vA])
 
             if t < eps:
@@ -534,6 +647,17 @@ def trielec(
             face_labels[f_idx] = electrode_label
 
     labeled_count = np.sum(face_labels != -1)
+
+    for el_idx in range(len(electrode_pts)):
+        count = int(np.sum(face_labels == (el_idx + 1)))
+        if count == 0:
+            print(
+                f"WARNING: Electrode {el_idx + 1} received zero labeled faces. "
+                f"Check its center/radius and whether it intersects the surface mesh."
+            )
+        else:
+            print(f"Electrode {el_idx + 1}: {count} labeled faces")
+
     print("\n=== TRIELEC FINISHED ===")
     print(f"Final vertices: {len(final_verts)}")
     print(f"Final faces: {len(final_faces)}")
@@ -554,8 +678,8 @@ def trielec(
         if smooth_lines:
             print(f"Smoothed {len(smooth_lines)} remaining sliver-adjacent vertex/vertices")
 
-    # Force direct extraction dump to the shared Desktop output folder during function execution
-    extraction_path = str(desktop_output_dir() / "extraction_trielec.txt")
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_trielec.txt")
     print(f"Dumping extraction data directly to: {extraction_path}")
     with open(extraction_path, "w") as f:
         f.write("=== FINAL VERTICES ===\n")
@@ -577,9 +701,20 @@ def trielec(
 def main(
     elec_descr_in: str, tri_in: str, tri_out: str, warp_name: Optional[str] = None,
     plot: bool = False, clean_slivers: bool = False, min_electrode_gap: Optional[float] = None,
+    symmetry_axis: Optional[str] = None, symmetry_plane: float = 0.0,
+    symmetry_pairs: Optional[str] = None,
 ):
     tri_verts, tri_ids = read_tri(tri_in)
     electrode_pts, electrode_radii = load_electrode_file(elec_descr_in)
+
+    # Enforce analytical electrode symmetry before any mesh intersection.
+    electrode_pts, electrode_radii = enforce_electrode_symmetry(
+        electrode_pts,
+        electrode_radii,
+        symmetry_axis=symmetry_axis,
+        symmetry_plane=symmetry_plane,
+        symmetry_pairs=symmetry_pairs,
+    )
 
     tri_verts, tri_ids, face_labels, warp_lines = trielec(
         tri_verts, tri_ids, electrode_pts, electrode_radii,
@@ -615,6 +750,20 @@ if __name__ == "__main__":
              "spheres, layered on top of the always-on exact mesh-edge check. Unset by "
              "default (the exact check alone is the real correctness requirement)."
     )
+    parser.add_argument(
+        "--symmetry-axis", choices=("x", "y", "z"), default=None,
+        help="Reflect electrode geometry across a plane normal to this axis. "
+             "For two electrodes, electrode 2 is made the exact mirror of electrode 1."
+    )
+    parser.add_argument(
+        "--symmetry-plane", type=float, default=0.0,
+        help="Coordinate of the symmetry plane along --symmetry-axis. Default: 0."
+    )
+    parser.add_argument(
+        "--symmetry-pairs", type=str, default=None,
+        help='Explicit 1-based electrode pairs to mirror, e.g. "1:2,3:4". '
+             "If omitted, exactly two electrodes are paired automatically."
+    )
 
     args = parser.parse_args()
     main(
@@ -625,4 +774,7 @@ if __name__ == "__main__":
         plot=args.plot,
         clean_slivers=args.clean_slivers,
         min_electrode_gap=args.min_electrode_gap,
+        symmetry_axis=args.symmetry_axis,
+        symmetry_plane=args.symmetry_plane,
+        symmetry_pairs=args.symmetry_pairs,
     )
