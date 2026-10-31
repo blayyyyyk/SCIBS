@@ -1,21 +1,57 @@
 from numpy.typing import ArrayLike
 from typing import Callable, Optional, Sequence, Iterable
 import struct
+from pathlib import Path
 
 import numpy as np
 import scipy.io as sio
 
+from ..config import PROJECT_OUTPUT_DIR
 from .mat import is_model
 
 
-def write_mat(file_prefix: str, pts: np.ndarray, ids: np.ndarray, struct_name: str):
+def output_dir() -> Path:
+    """Resolves the project's `out/` folder, creating it if needed.
+
+    Shared destination for every generated artifact (final meshes, plot
+    screenshots, debug extraction dumps) so results land in one place --
+    next to the code that produced them -- regardless of where the source
+    data lives or which directory the command was run from.
+    """
+    PROJECT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    return PROJECT_OUTPUT_DIR
+
+
+def write_mat(
+    file_prefix: str,
+    pts: np.ndarray,
+    ids: np.ndarray,
+    struct_name: str,
+    potentials: Optional[np.ndarray] = None,
+    output_prefix: Optional[str] = None,
+):
+    """Writes `{file_prefix}_E.mat`/`.pot`, or `{output_prefix}_E.mat`/`.pot`
+    if `output_prefix` is given (e.g. to redirect results to a different
+    folder than the source `.mat` while still reading the original from
+    `file_prefix`).
+    """
     mat_contents = sio.loadmat(f"{file_prefix}.mat")
-    
+
     if not is_model(mat_contents[struct_name]):
         raise ValueError(f"Struct {struct_name} is not a valid model")
-    
+
     mat_contents[struct_name]['node'][0, 0] = pts
     mat_contents[struct_name]['cell'][0, 0] = ids + 1
+
+    out_prefix = output_prefix if output_prefix is not None else file_prefix
+
+    # Persist the per-node surface potentials (electrode ids) alongside the
+    # mesh as a sibling variable, and as a companion `.pot` file in the
+    # original SCIBS binary format.
+    if potentials is not None:
+        potentials = np.asarray(potentials).reshape(-1, 1)
+        mat_contents["electrode_pot"] = potentials
+        write_pot(f"{out_prefix}_E.pot", potentials)
 
     # remove metadata to avoid warnings
     try:
@@ -24,7 +60,7 @@ def write_mat(file_prefix: str, pts: np.ndarray, ids: np.ndarray, struct_name: s
     except:
         pass
 
-    sio.savemat(f"{file_prefix}_E.mat", mat_contents)
+    sio.savemat(f"{out_prefix}_E.mat", mat_contents)
 
 
 def read_mat(file_name: str, struct_name: str) -> tuple[np.ndarray, np.ndarray]:

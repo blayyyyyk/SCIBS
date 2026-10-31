@@ -2,10 +2,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 
-from scibs.utilities.file import read_mat
+from scibs.utilities.file import output_dir, read_mat
 
 
-def visualize_mesh(verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray, electrode_pts: np.ndarray):
+def _output_path(name: str) -> str:
+    """Resolves the project's `out/{name}.png`, creating the folder if needed."""
+    return str(output_dir() / f"{name}.png")
+
+
+def visualize_mesh(
+    verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray, electrode_pts: np.ndarray,
+    name: str = "mesh",
+):
     """Renders the mesh using PyVista for GPU-accelerated 3D visualization."""
     print("Rendering hardware-accelerated mesh visualization... (Close the window to complete execution)")
     padding = np.full((len(faces), 1), 3, dtype=np.int64)
@@ -49,13 +57,29 @@ def visualize_mesh(verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray
             label="Electrode Centers"
         )
 
+        # Electrode ids are 1-indexed (see trielec.py's face_labels), so label
+        # point i with i + 1 to match what's shown in the Electrode_ID scalar bar.
+        electrode_ids = [str(i + 1) for i in range(len(electrode_pts))]
+        plotter.add_point_labels(
+            electrode_pts,
+            electrode_ids,
+            font_size=14,
+            text_color="white",
+            shape_color="black",
+            shape_opacity=0.6,
+            always_visible=True,
+            show_points=False,
+        )
+
     plotter.add_legend()
-    plotter.show()
+    screenshot_path = _output_path(name)
+    plotter.show(screenshot=screenshot_path)
+    print(f"Saved screenshot to {screenshot_path}")
 
 
 
 
-def visualize_tet_volume(vertices: np.ndarray, tets: np.ndarray):
+def visualize_tet_volume(vertices: np.ndarray, tets: np.ndarray, name: str = "tet_volume"):
     # PyVista requires a padding cell type column.
     # For tetrahedrons (4 vertices), we prepend '4' to every row.
     pad = np.full((tets.shape[0], 1), 4)
@@ -68,9 +92,11 @@ def visualize_tet_volume(vertices: np.ndarray, tets: np.ndarray):
     grid = pv.UnstructuredGrid(cells, cell_types, vertices)
 
     # Plot it
-    grid.plot(show_edges=True, opacity=1.0, color="lightgray", edge_color="green")
+    screenshot_path = _output_path(name)
+    grid.plot(show_edges=True, opacity=1.0, color="lightgray", edge_color="green", screenshot=screenshot_path)
+    print(f"Saved screenshot to {screenshot_path}")
 
-def visualize_potentials(vertices: np.ndarray, tets: np.ndarray, potentials: np.ndarray):
+def visualize_potentials(vertices: np.ndarray, tets: np.ndarray, potentials: np.ndarray, name: str = "potentials"):
     """
     Visualizes the mapped electrode potentials on the volumetric tetrahedral mesh.
     """
@@ -92,6 +118,34 @@ def visualize_potentials(vertices: np.ndarray, tets: np.ndarray, potentials: np.
     # Rendering millions of internal tetrahedral edges is computationally heavy and visually messy.
     surface = grid.extract_surface()
 
+    # `potentials` is per-NODE, but every triangle straddling an electrode
+    # boundary has one electrode-id corner and one background/NaN corner.
+    # Coloring by that point data -- interpolated or not -- still blends those
+    # two colors somewhere across the triangle (a smudged/soft edge at best, a
+    # rainbow "spike" at worst with a high-contrast colormap), because a color
+    # is still being *interpolated* across each triangle's face either way.
+    # Converting to a per-triangle (cell) label first removes the ambiguity
+    # entirely: each triangle gets one flat, solid color with a crisp boundary,
+    # the same technique `visualize_mesh` already uses for the surface-only view.
+    surf_faces = surface.faces.reshape(-1, 4)[:, 1:4]
+    corner_vals = surface.point_data["Electrode_ID"][surf_faces]
+    a, b, c = corner_vals[:, 0], corner_vals[:, 1], corner_vals[:, 2]
+
+    def _eq(x, y):
+        return (np.isnan(x) & np.isnan(y)) | (x == y)
+
+    # No two corners agree: three genuinely different regions (e.g. two
+    # different electrodes plus background) all touch this one triangle --
+    # this happens when two electrodes sit closer together than the mesh's
+    # own triangle size, so a single background triangle's footprint reaches
+    # both of their boundary rings at once. Neither electrode legitimately
+    # owns it (trielec's own face labels never gave it to either one), so
+    # leaving it as background/NaN is the honest rendering -- picking a side
+    # here previously showed up as one electrode's color bleeding into its
+    # neighbor's.
+    face_labels = np.where(_eq(a, b), a, np.where(_eq(b, c), b, np.where(_eq(a, c), a, np.nan)))
+    surface.cell_data["Electrode_ID"] = face_labels
+
     plotter = pv.Plotter()
 
     plotter.add_mesh(
@@ -103,10 +157,28 @@ def visualize_potentials(vertices: np.ndarray, tets: np.ndarray, potentials: np.
         line_width=0.5,
         nan_color="lightgray",
         nan_opacity=1.0,    # Make the non-electrode scalp transparent
-        show_scalar_bar=True
+        show_scalar_bar=True,
     )
 
-    plotter.show()
+    # Label each electrode at the centroid of its potential-carrying nodes
+    # (base scalp nodes + any extruded pad nodes from elecpatch).
+    electrode_ids = np.unique(potentials[potentials != -1])
+    if len(electrode_ids) > 0:
+        label_pts = np.array([vertices[potentials == eid].mean(axis=0) for eid in electrode_ids])
+        plotter.add_point_labels(
+            label_pts,
+            [str(int(eid)) for eid in electrode_ids],
+            font_size=14,
+            text_color="white",
+            shape_color="black",
+            shape_opacity=0.6,
+            always_visible=True,
+            show_points=False,
+        )
+
+    screenshot_path = _output_path(name)
+    plotter.show(screenshot=screenshot_path)
+    print(f"Saved screenshot to {screenshot_path}")
 
 if __name__ == "__main__":
     pts, tets = read_mat("/Users/blakemoody/dev/SCIBS/data/MNI152.mat", "Geometry")

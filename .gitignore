@@ -13,3 +13,7 @@
 
 out/**/*
 code_artifacts/**
+
+# debug dumps written by the pipeline scripts (trielec, tetwarp, etc.)
+extraction*.txt
+pipeline_log.txt

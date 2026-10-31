@@ -1,0 +1,75 @@
+### Action Items
+
+- [x]  Sumientra to send meeting notes to Bibek
+- [x]  Sumientra to share C++ source code with Bibek
+- [x]  Kyle to send Google Drive folder link in Discord
+- [x]  Sumientra to add MATLAB pipeline code to Google Drive
+- [x]  Sumientra to update Google Drive folder permissions to Editor for Bibek
+- [ ]  Kyle to upload a complete example EP file (model with patches and conductivity index) to Google Drive
+- [ ]  Kyle to send an example image of the multi-layer electrode model
+- [ ]  Bibek to visualize intermediate outputs after each pipeline step
+- [ ]  Bibek to run the full pipeline on the real head model (once access is set up) to verify it works
+- [ ]  Bibek to implement the missing node-based surface potentials for the top of electrode patches (MATLAB→Python migration)
+- [ ]  Bibek to fix electrode labels from 0–63 to 1–64 (0 should mean no electrode)
+- [ ]  Bibek to clean up sliver/sharp triangles in the mesh
+- [ ]  Bibek to investigate and fix elements extending outside electrode circles
+- [ ]  Bibek to implement multi-layer electrode extrusion (currently only one layer)
+- [ ]  Bibek to coordinate with Kyle for campus visits (Tue/Wed/Thu)
+
+### Meeting Context
+
+- Meeting purpose: onboard Bibek taking over the project from Blake, who migrated C++/MATLAB electrode mesh code to Python
+- Attendees: Sumientra (professor), Kyle (collaborator), Bibek
+- Blake remains reachable for questions about the original code (based in San Francisco)
+
+### Pipeline Walkthrough
+
+The pipeline builds a finite element head mesh with EEG electrodes and runs in these stages: 
+
+- **tet2tri** — extracts the surface triangles from the tetrahedral volume mesh
+- **triElec** — places electrodes by cutting circles into the surface at given coordinates and radius; rebuilds surrounding triangles and tracks all changes in a list
+- **TetWarp** — propagates the surface triangle changes into the volume tetrahedra, ensuring the interior elements are split to match the new surface
+- **ElecPotSurf** — assigns a numeric label (electrode index) to each surface face; faces with no electrode get 0, others get 1–64
+- **ElecPatch** — extrudes the electrode circle into a cylindrical patch on top of the surface and labels all patch elements
+- **TetCor (×2)** — corrects node ordering consistency across all tetrahedra (run once after triElec, once after ElecPatch, since adding elements disrupts ordering)
+
+### Missing Piece: Node-Based Surface Potentials
+
+- The pipeline currently labels **elements** with electrode indices
+- What is still missing: a second vector that labels **nodes** on the top surface of each electrode patch with the same electrode index
+- This is needed to identify just the top layer where current is applied in simulation
+- The original MATLAB code for this exists and needs to be translated to Python
+
+### Known Issues to Fix
+
+- **Sliver triangles**: very narrow, low-angle triangles appear around electrode circles after insertion; these cause problems in finite element simulation
+- **Elements outside circle boundary**: some mesh elements protrude beyond the electrode circle boundary, creating sharp edges that cause simulation errors
+- Cleaning up sliver triangles may also resolve the boundary protrusion issue automatically
+- Approach: either redistribute nodes manually around the circle, or use an existing Python meshing library
+
+### Electrode Layer Improvement (Future Work)
+
+- Currently: electrode patches are a single layer of large elements
+- Required: multiple layers of smaller elements to accurately capture the rapidly changing electric field near the electrode surface
+- Why it matters: finite element simulation assigns one value per element; more layers = more accuracy where field gradients are steep
+- Current original pipeline uses exact-copy stacked layers (works but not ideal); Blake's code uses a single layer; the goal ("Vivek version") is a free-form multi-layer zone
+
+### Conductivity Index (Context for Full Head Model)
+
+- Each element in the head model is assigned a conductivity index (e.g. skin=1, skull=2, brain=3)
+- Electrode elements will receive a conductivity index of 0 (or their own label)
+- In simulation, these indices are replaced with real physical conductivity values (e.g. skin = 0.4 S/m)
+- The data is stored as: node matrix (x,y,z), element matrix (node indices per element), conductivity index vector (one label per element)
+
+### Testing Strategy
+
+- Use the **egg model** (small synthetic tetrahedral mesh) for all development and debugging — it is fast and already reproduces all known issues
+- Visualize intermediate outputs after each pipeline step, not just the final result
+- Once features are working on the egg, validate on the real head model (~4 million elements)
+- Share results in the Google Drive folder; Kyle will verify correctness
+
+### Resources and Communication
+
+- **Discord channel**: existing channel (previously with Sumientra, Kyle, Blake); Bibek has been added; Blake may still answer questions there
+- **Google Drive folder**: contains `/data` (head model .mat file), `/programs` (original C++ source from 1971), `/source` (all C++ code), and MATLAB pipeline files
+- **Campus access**: lab is at Morrissey Boulevard; doors are locked — coordinate with Kyle (on campus Tue/Wed/Thu) to get access

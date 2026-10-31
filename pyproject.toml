@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "scibs"
 version = "0.1.0"
@@ -8,6 +12,10 @@ authors = [
 ]
 dependencies = [
     "matplotlib>=3.10.8",
+    # Used directly and pervasively throughout the package. It arrives
+    # transitively via scipy/pyvista anyway, but relying on that means an
+    # install can break from a change in someone else's dependency tree.
+    "numpy>=1.26",
     "pyvista>=0.47.1",
     "scipy>=1.17.1",
 ]
@@ -18,4 +26,4 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src", "."] # search in both src/ and root
+where = ["src"] # package lives under src/

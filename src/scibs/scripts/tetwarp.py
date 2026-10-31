@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import Literal
 from argparse import ArgumentParser
 import numpy as np
-from scibs.utilities.file import read_pts, read_tet, read_el, read_tot, write_tetwarp
+from scibs.utilities.file import output_dir, read_pts, read_tet, read_el, read_tot, write_tetwarp
 
 
 def parse(line: str):
@@ -32,7 +32,11 @@ def parse(line: str):
     elif line.startswith("a"):
         parts = line.split()
         return "add", int(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
-    
+
+    elif line.startswith("c"):
+        parts = line.split()
+        return "collapse", int(parts[1]), int(parts[2])
+
     return None
 
 
@@ -172,30 +176,85 @@ def tetwarp(pts, el_map, tot_map, tets, warp_lines: list[str]):
     def move(node_id, x, y, z):
         tvf_idx = el_map[node_id]
         pts[tvf_idx] = [x, y, z]
-        
+
     def add(node_id, x, y, z):
         if node_id != len(el_map):
             raise ValueError(f"Warp problem: Expected new node index {len(el_map)}, got {node_id}")
         pts.append([x, y, z])
         el_map.append(len(pts) - 1)
-    
-    
+
+    # Volumetric-node aliasing for `collapse`. cleanup_slivers() merges surface
+    # vertices in pairs (never touching electrode-boundary vertices -- see its
+    # docstring), and each merge is replayed here on the corresponding
+    # volumetric nodes so the tet mesh stays consistent with the surface mesh.
+    # The merged-away node is left in `pts` (unreferenced, harmless) rather
+    # than compacted, so every other node index -- and therefore `el_map`
+    # itself -- stays stable.
+    vol_alias: dict[int, int] = {}
+
+    def resolve(tvf_idx):
+        while tvf_idx in vol_alias:
+            tvf_idx = vol_alias[tvf_idx]
+        return tvf_idx
+
+    def collapse(keep_node, merge_node):
+        tvf_keep = resolve(el_map[keep_node])
+        tvf_merge = resolve(el_map[merge_node])
+        if tvf_keep == tvf_merge:
+            return
+
+        for itet in list(node_to_tets[tvf_merge]):
+            tet = tets[itet]
+            for k in range(4):
+                if tet[k] == tvf_merge:
+                    tet[k] = tvf_keep
+            node_to_tets[tvf_keep].add(itet)
+        node_to_tets[tvf_merge] = set()
+
+        vol_alias[tvf_merge] = tvf_keep
+
     count = 0
     for line in warp_lines:
         parsed = parse(line.strip())
         if not parsed:
             continue
-            
+
         func_name, *args = parsed
-        
-        func = {"split": split, "move": move, "add": add}.get(func_name)
+
+        func = {"split": split, "move": move, "add": add, "collapse": collapse}.get(func_name)
         if func is None:
             raise ValueError(f"Unknown function: {func_name}")
-        
+
         func(*args)
         count += 1
-            
-    return np.array(pts), np.array(tets), tet_warp_history, np.array(el_map)
+
+    if vol_alias:
+        # A collapse can leave a tet with two corners pointing at the same
+        # (merged) node -- zero volume, and meaningless for the FEM solve.
+        tets = [t for t in tets if len(set(t)) == 4]
+
+    final_pts = np.array(pts)
+    final_tets = np.array(tets)
+    final_el_map = np.array(el_map)
+
+    # Force direct extraction dump to the shared project output folder during function execution
+    extraction_path = str(output_dir() / "extraction_tetwarp.txt")
+    print(f"Dumping extraction data directly to: {extraction_path}")
+    with open(extraction_path, "w") as f:
+        f.write("=== FINAL POINTS ===\n")
+        np.savetxt(f, final_pts, fmt="%.15g")
+
+        f.write("\n=== FINAL TETS ===\n")
+        np.savetxt(f, final_tets, fmt="%d")
+
+        f.write("\n=== EL_MAP ===\n")
+        np.savetxt(f, final_el_map.reshape(-1, 1), fmt="%d")
+
+        f.write("\n=== TET_WARP_HISTORY ===\n")
+        for entry in tet_warp_history:
+            f.write(" ".join(str(v) for v in entry) + "\n")
+
+    return final_pts, final_tets, tet_warp_history, final_el_map
 
 
 def main(file_prefix: str):
@@ -206,11 +265,11 @@ def main(file_prefix: str):
     tets = read_tet(f"{file_prefix}.tet")
     el_map = read_el(f"{file_prefix}.el") 
     tot_map = read_tot(f"{file_prefix}.tot")
-    pts, tets, history = tetwarp(
-        pts, 
-        el_map, 
-        tot_map, 
-        tets, 
+    pts, tets, history, el_map = tetwarp(
+        pts,
+        el_map,
+        tot_map,
+        tets,
         warp_lines
     )
     write_tetwarp(f"{file_prefix}_test_out.tetwarp", history)
