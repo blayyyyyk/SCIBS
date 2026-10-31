@@ -78,7 +78,7 @@ def _boundary_vertex_mask(faces: np.ndarray, face_labels: np.ndarray, n_verts: i
 
 def cleanup_slivers(
     verts: np.ndarray, faces: np.ndarray, face_labels: np.ndarray,
-    quality_threshold: float = 0.15, max_passes: int = 8,
+    quality_threshold: float = 0.15, max_passes: int = 24,
 ):
     """Collapses sliver triangles left behind by the electrode-boundary cuts.
 

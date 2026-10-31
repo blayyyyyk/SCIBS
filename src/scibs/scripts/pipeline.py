@@ -5,7 +5,7 @@ from typing import Optional
 from scibs.scripts.elecpatch import elecpatch
 from scibs.scripts.elecpotsurf import check_electrode_conflicts, elecpotsurf
 from scibs.scripts.tet2tri import tet2tri
-from scibs.scripts.tetcor import tetcor
+from scibs.scripts.tetcor import compact_nodes, drop_degenerate_tets, tetcor
 from scibs.scripts.tetwarp import tetwarp
 from scibs.scripts.trielec import trielec
 
@@ -72,6 +72,17 @@ def pipeline(
 
     print("Running tetcor (Extruded Geometry)")
     tet_ids, n_corrected = tetcor(tet_pts, tet_ids)
+
+    # Flat elements survive tetcor (there is no orientation to flip), and would
+    # reach the solver as a singular element Jacobian, so clear them before the
+    # mesh is written rather than leaving it to whatever consumes the .mat.
+    tet_ids, n_degenerate = drop_degenerate_tets(tet_pts, tet_ids)
+    print(f"Dropped {n_degenerate} degenerate (zero-volume) tetrahedra")
+
+    tet_pts, tet_ids, electrode_pots, n_orphaned = compact_nodes(
+        tet_pts, tet_ids, electrode_pots
+    )
+    print(f"Dropped {n_orphaned} orphaned node(s) referenced by no element")
 
     visualize_tet_volume(tet_pts, tet_ids, name=f"{run_name}_tet_volume")
     visualize_potentials(tet_pts, tet_ids, electrode_pots, name=f"{run_name}_potentials")
